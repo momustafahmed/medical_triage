@@ -3,6 +3,6 @@ pandas==2.2.2
 numpy==1.26.4
 scikit-learn==1.4.2
 joblib==1.5.1
-xgboost==2.0.3
-# shap is only needed if you plan to generate SHAP plots at runtime; uncomment if required
+# (Removed xgboost; current deployed model uses RandomForest only)
+# Uncomment below if SHAP visuals needed at runtime
 # shap==0.45.1
