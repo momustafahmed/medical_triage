@@ -1,9 +1,13 @@
-
 import streamlit as st
 import numpy as np
 import pandas as pd
-from joblib import load
 import json
+
+# Graceful import of joblib (avoid hard crash on Cloud if dependency not picked up)
+try:  # noqa: SIM105
+    from joblib import load  # type: ignore
+except Exception:  # broad on purpose – we only need to detect import failure
+    load = None  # type: ignore
 
 # ---------------- Basic setup ----------------
 st.set_page_config(page_title="Talo bixiye Caafimaad", layout="centered")
@@ -11,12 +15,20 @@ st.set_page_config(page_title="Talo bixiye Caafimaad", layout="centered")
 # Subtle top spacing
 st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-# Load fitted pipeline and (optional) label encoder
-pipe = load("models/best_pipe.joblib")
-try:
-    le = load("models/label_encoder.joblib")
-except Exception:
-    le = None
+# Load fitted pipeline and (optional) label encoder (only if joblib import worked)
+pipe = None
+le = None
+if load is None:
+    st.error("Lama helin 'joblib'. Hubi in 'requirements.txt' uu ku jiro joblib oo dib u daabac app-ka (Restart).")
+else:
+    try:
+        pipe = load("models/best_pipe.joblib")
+    except Exception as e:
+        st.error(f"Faylka moodelka lama helin ama lama furi karo: {e}")
+    try:
+        le = load("models/label_encoder.joblib")
+    except Exception:
+        le = None
 
 # Load feature schema if available (for correct column order/types)
 CAT_FALLBACK = [
@@ -252,6 +264,8 @@ if st.button("Qiimee"):
         st.warning("Fadlan dooro da'da.")
     elif len(selected) == 0:
         st.warning("Fadlan dooro ugu yaraan hal calaamad.")
+    elif pipe is None:
+        st.error("Modelka lama adeegsan karo (pipe=None). Fadlan hubi in faylka 'models/best_pipe.joblib' uu jiro oo joblib la rakibay.")
     else:
         x = make_input_df(payload)
         y_pred = pipe.predict(x)[0]
