@@ -1,16 +1,8 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+from joblib import load
 import json
-import sys, traceback
-
-# Import joblib with explicit error capture so we can surface details if it fails in Cloud
-_joblib_import_error = None
-try:  # noqa: SIM105
-    from joblib import load  # type: ignore
-except Exception as e:  # broad on purpose – surface message to user
-    _joblib_import_error = e
-    load = None  # type: ignore
 
 # ---------------- Basic setup ----------------
 st.set_page_config(page_title="Talo bixiye Caafimaad", layout="centered")
@@ -18,34 +10,12 @@ st.set_page_config(page_title="Talo bixiye Caafimaad", layout="centered")
 # Subtle top spacing
 st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-st.write("✅ Boot marker: script reached start (qabo haddii weli 'oven').")
-
-# Lazy / cached loading to speed cold start and allow page to render quickly
-@st.cache_resource(show_spinner=False)
-def load_artifacts():
-    """Return (pipeline, label_encoder) or (None, None) with error surfaced separately."""
-    if load is None:
-        return None, None
-    mdl = enc = None
-    try:
-        mdl = load("models/best_pipe.joblib")
-    except Exception as e:
-        st.error(f"Faylka moodelka lama furin: {e}")
-    try:
-        enc = load("models/label_encoder.joblib")
-    except Exception:
-        enc = None
-    return mdl, enc
-
-if load is None:
-    st.error(
-        "Lama helin 'joblib'. Hubi 'requirements.txt' kadibna samee Reboot. Faahfaahin: "
-        + f"{type(_joblib_import_error).__name__}: {_joblib_import_error}"
-    )
-    with st.expander("Faahfaahin farsamo (debug)"):
-        st.write({"python_version": sys.version})
-        st.text("\n".join(traceback.format_exception_only(type(_joblib_import_error), _joblib_import_error)))
-pipe, le = load_artifacts()
+# Load fitted pipeline and (optional) label encoder
+pipe = load("models/best_pipe.joblib")
+try:
+    le = load("models/label_encoder.joblib")
+except Exception:
+    le = None
 
 # Load feature schema if available (for correct column order/types)
 CAT_FALLBACK = [
@@ -59,16 +29,13 @@ CAT_FALLBACK = [
 ]
 NUM_FALLBACK = ["Red_Flag_Count"]
 
-@st.cache_data(show_spinner=False)
-def load_schema():
-    try:
-        with open("ui_assets/feature_schema.json", "r", encoding="utf-8") as f:
-            schema = json.load(f)
-        return schema.get("cat_cols", CAT_FALLBACK), schema.get("num_cols", NUM_FALLBACK)
-    except Exception:
-        return CAT_FALLBACK, NUM_FALLBACK
-
-CAT_COLS, NUM_COLS = load_schema()
+try:
+    with open("ui_assets/feature_schema.json", "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    CAT_COLS = schema.get("cat_cols", CAT_FALLBACK)
+    NUM_COLS = schema.get("num_cols", NUM_FALLBACK)
+except Exception:
+    CAT_COLS, NUM_COLS = CAT_FALLBACK, NUM_FALLBACK
 
 EXPECTED_COLS = CAT_COLS + NUM_COLS
 
@@ -284,8 +251,6 @@ if st.button("Qiimee"):
         st.warning("Fadlan dooro da'da.")
     elif len(selected) == 0:
         st.warning("Fadlan dooro ugu yaraan hal calaamad.")
-    elif pipe is None:
-        st.error("Modelka lama adeegsan karo (pipe=None). Hubi 'models/best_pipe.joblib' iyo 'joblib' dependency.")
     else:
         x = make_input_df(payload)
         y_pred = pipe.predict(x)[0]
