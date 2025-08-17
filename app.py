@@ -2,11 +2,14 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import json
+import sys, traceback
 
-# Graceful import of joblib (avoid hard crash on Cloud if dependency not picked up)
+# Import joblib with explicit error capture so we can surface details if it fails in Cloud
+_joblib_import_error = None
 try:  # noqa: SIM105
     from joblib import load  # type: ignore
-except Exception:  # broad on purpose – we only need to detect import failure
+except Exception as e:  # broad on purpose – surface message to user
+    _joblib_import_error = e
     load = None  # type: ignore
 
 # ---------------- Basic setup ----------------
@@ -19,7 +22,15 @@ st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 pipe = None
 le = None
 if load is None:
-    st.error("Lama helin 'joblib'. Hubi in 'requirements.txt' uu ku jiro joblib oo dib u daabac app-ka (Restart).")
+    st.error(
+        "Lama helin 'joblib'. Hubi 'requirements.txt' kadibna samee Reboot. Faahfaahin: "
+        + f"{type(_joblib_import_error).__name__}: {_joblib_import_error}"
+    )
+    with st.expander("Faahfaahin farsamo (debug)"):
+        st.write({
+            "python_version": sys.version,
+        })
+        st.text("\n".join(traceback.format_exception_only(type(_joblib_import_error), _joblib_import_error)))
 else:
     try:
         pipe = load("models/best_pipe.joblib")
